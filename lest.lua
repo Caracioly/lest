@@ -1,3 +1,10 @@
+-- lest.lua v0.1
+
+-- Copyright (c) 2026 André Caracioly
+-- Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
+-- The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
+-- THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+
 local lest = {}
 
 local state = {
@@ -69,10 +76,11 @@ local function deepEqual(left, right, visited)
     end
 
     visited = visited or {}
-    if visited[left] and visited[left] == right then
+    visited[left] = visited[left] or {}
+    if visited[left][right] then
         return true
     end
-    visited[left] = right
+    visited[left][right] = true
 
     for key, value in pairs(left) do
         if not deepEqual(value, right[key], visited) then
@@ -93,45 +101,49 @@ local function formatValue(value)
     if type(value) == "string" then
         return string.format("%q", value)
     end
+    if type(value) == "table" then
+        return "{...}"
+    end
     return tostring(value)
 end
 
-local function currentPrefix()
-    if #state.prefixStack == 0 then
-        return ""
-    end
-    return table.concat(state.prefixStack, " ") .. " "
-end
-
+---@param name string
+---@param fn fun()
 function lest.describe(name, fn)
     table.insert(state.prefixStack, name)
-    local ok, err = pcall(fn)
+    fn()
     table.remove(state.prefixStack)
-
-    if not ok then
-        error(err, 0)
-    end
 end
 
+---@param name string
+---@param fn fun()
 function lest.it(name, fn)
     local suiteName = table.concat(state.prefixStack, " ")
     table.insert(state.tests, {
         suite = suiteName ~= "" and suiteName or "(root)",
         name = name,
-        fullName = currentPrefix() .. name,
         fn = fn
     })
 end
 
+---@class LestExpectation
+---@field toBe fun(expected:any)
+---@field toEqual fun(expected:any)
+---@field notToBe fun(expected:any)
+
+---Creates an assertion object for the provided value.
+---Use returned methods to validate expected outcomes.
+---@param actual any
+---@return LestExpectation
 function lest.expect(actual)
     return {
         toBe = function(expected)
             if actual ~= expected then
                 error(
                     string.format(
-                        "Expected %s to be %s",
-                        formatValue(actual),
-                        formatValue(expected)
+                        "Expected: %s\nReceived: %s",
+                        formatValue(expected),
+                        formatValue(actual)
                     ),
                     0
                 )
@@ -141,9 +153,21 @@ function lest.expect(actual)
             if not deepEqual(actual, expected) then
                 error(
                     string.format(
-                        "Expected %s to equal %s",
-                        formatValue(actual),
-                        formatValue(expected)
+                        "Expected (deep equal): %s\nReceived: %s",
+                        formatValue(expected),
+                        formatValue(actual)
+                    ),
+                    0
+                )
+            end
+        end,
+        notToBe = function(expected)
+            if actual == expected then
+                error(
+                    string.format(
+                        "Expected value to be different from: %s\nReceived: %s",
+                        formatValue(expected),
+                        formatValue(actual)
                     ),
                     0
                 )
@@ -152,6 +176,13 @@ function lest.expect(actual)
     }
 end
 
+---@class LestConfig
+---@field colors? boolean Enable or disable ANSI colors in output.
+---@field unicode? boolean Force unicode symbols (true/false) or auto-detect (nil).
+---@field showStack? boolean Show full stack traces on failed tests.
+
+---Configures runner output behavior.
+---@param options LestConfig
 function lest.configure(options)
     options = options or {}
 
@@ -168,6 +199,8 @@ function lest.configure(options)
     end
 end
 
+---Runs all registered tests and prints suite/test summary.
+---@return integer exitCode Returns 0 when all tests pass, otherwise 1.
 function lest.run()
     local passed = 0
     local failed = 0
@@ -243,7 +276,9 @@ function lest.run()
         print(withColor("Failed Tests", ANSI_RED))
         for _, failedTest in ipairs(failedTests) do
             print(withColor(failIcon, ANSI_RED) .. " " .. failedTest.suite .. " " .. failedTest.name)
-            print("  " .. withColor(failedTest.message, ANSI_GRAY))
+            for line in tostring(failedTest.message):gmatch("[^\n]+") do
+                print("  " .. withColor(line, ANSI_GRAY))
+            end
         end
     end
 
