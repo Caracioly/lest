@@ -40,6 +40,15 @@ Only files ending with `.test.lua` are loaded by the runner.
 Preferred location for the library file:
 - put `lest.lua` inside `libs/`
 
+The default `tests.lua` runner already tries these paths automatically:
+- `./libs/lest/lest.lua`
+- `./libs/lest.lua`
+- `./lib/lest/lest.lua`
+- `./lib/lest.lua`
+- `./lest.lua`
+
+In most projects, no manual `package.path` setup is needed when using the runner.
+
 If `lest.lua` is in `libs/`, add this before `require("lest")`:
 
 ```lua
@@ -152,5 +161,5 @@ Files are sorted before loading for stable/debug-friendly order.
 
 ## License
 
-See LICENSE file.
+See [LICENSE](https://github.com/Caracioly/lest/blob/main/LICENSE).
 

@@ -1,4 +1,48 @@
-local lest = require("lest")
+local function fileExists(path)
+    local file = io.open(path, "r")
+    if not file then
+        return false
+    end
+
+    file:close()
+    return true
+end
+
+local function requireLest()
+    local ok, module = pcall(require, "lest")
+    if ok then
+        return module
+    end
+
+    local fallbackPaths = {
+        "./libs/lest/lest.lua",
+        "./libs/lest.lua",
+        "./lib/lest/lest.lua",
+        "./lib/lest.lua",
+        "./lest.lua"
+    }
+
+    for _, path in ipairs(fallbackPaths) do
+        if fileExists(path) then
+            local chunk, loadError = loadfile(path)
+            if not chunk then
+                error("Failed to load 'lest' from " .. path .. ": " .. tostring(loadError), 0)
+            end
+
+            local loaded = chunk()
+            package.loaded["lest"] = loaded
+            return loaded
+        end
+    end
+
+    error(
+        "module 'lest' not found. Tried require('lest') and fallback paths: "
+            .. table.concat(fallbackPaths, ", "),
+        0
+    )
+end
+
+local lest = requireLest()
 
 local function listTestFiles(directory)
     local pathSeparator = package.config:sub(1, 1)
